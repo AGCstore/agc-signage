@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Bloomberg TV — Live</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
+  :root { --overscan: 0%; }               /* raise to ~3% if you see thin edges/bars */
+  #stage { position:fixed; inset:0; background:#000; }
+  #frame-wrap {
+    position:absolute;
+    top:calc(var(--overscan) * -1); left:calc(var(--overscan) * -1);
+    width:calc(100% + var(--overscan) * 2); height:calc(100% + var(--overscan) * 2);
+  }
+  iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+</style>
+</head>
+<body>
+  <div id="stage"><div id="frame-wrap"></div></div>
+
+<script>
+/* ============================================================
+   BLOOMBERG TV LIVE — kiosk page for UniFi Display Cast Pro (Web Mode)
+   ------------------------------------------------------------
+   1. Edit CONFIG below if needed.
+   2. Host this file (Netlify drop, or any static host / local server).
+   3. In UniFi Connect, point the Display Cast Pro's Web Mode URL here.
+   ============================================================ */
+const CONFIG = {
+  // 'channel' auto-follows whatever is currently live on the channel
+  // (recommended — survives Bloomberg restarting their stream).
+  // 'video' pins one specific YouTube video ID (fallback, see below).
+  mode: 'channel',
+
+  // Bloomberg Television — official 24/7 live financial-news channel.
+  channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg',
+
+  // Only used when mode === 'video'. If the channel embed ever shows
+  // "this channel has no live stream," open the live video on YouTube,
+  // copy its 11-char ID, paste it here, and set mode:'video'.
+  videoId: '',
+
+  // Start with sound ON. If the Cast Pro's Web Mode blocks
+  // autoplay-with-audio, set muted:true (plays silently), OR use
+  // UniFi Connect's native "YouTube" content type, which carries audio.
+  muted: false,
+
+  // Self-heal for unattended 24/7 use. Reloads the player on error and
+  // does a periodic refresh to clear silent stalls. Hours; 0 disables.
+  periodicRefreshHours: 6
+};
+
+function buildSrc() {
+  const base = (CONFIG.mode === 'video' && CONFIG.videoId)
+    ? 'https://www.youtube.com/embed/' + encodeURIComponent(CONFIG.videoId)
+    : 'https://www.youtube.com/embed/live_stream';
+  const p = new URLSearchParams({
+    autoplay: '1',
+    mute: CONFIG.muted ? '1' : '0',
+    controls: '0',
+    rel: '0',
+    modestbranding: '1',
+    playsinline: '1',
+    fs: '0',
+    iv_load_policy: '3',   // hide annotations
+    disablekb: '1'
+  });
+  if (CONFIG.mode !== 'video') p.set('channel', CONFIG.channelId);
+  return base + '?' + p.toString();
+}
+
+function mount() {
+  const wrap = document.getElementById('frame-wrap');
+  wrap.innerHTML = '';
+  const f = document.createElement('iframe');
+  f.src = buildSrc();
+  f.allow = 'autoplay; encrypted-media; picture-in-picture';
+  f.setAttribute('allowfullscreen', '');
+  f.addEventListener('error', () => setTimeout(mount, 5000));
+  wrap.appendChild(f);
+}
+
+mount();
+
+if (CONFIG.periodicRefreshHours > 0) {
+  setInterval(mount, CONFIG.periodicRefreshHours * 3600 * 1000);
+}
+
+// Best-effort keep-awake (harmless where unsupported)
+if ('wakeLock' in navigator) {
+  const keepAwake = () => navigator.wakeLock.request('screen').catch(() => {});
+  keepAwake();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') keepAwake();
+  });
+}
+</script>
+</body>
+</html>
